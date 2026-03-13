@@ -1,5 +1,6 @@
 use colored::Colorize;
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 use std::{env, thread};
@@ -18,9 +19,9 @@ pub fn init_backend(backend: &str) -> Option<Child> {
 
     let backend_dir = current_dir.join("backends").join(backend);
 
-    let mut cmd = Command::new("cmd");
-    cmd.args(["/C", "start", "\"\"", "/B", backend_path.to_str().unwrap()])
-        .current_dir(backend_dir)
+    let mut cmd = Command::new(backend_path);
+    cmd.current_dir(backend_dir)
+        .creation_flags(0x08000000)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .stdin(Stdio::null());
@@ -36,7 +37,17 @@ pub fn init_backend(backend: &str) -> Option<Child> {
 
 pub fn wait_for_backend(addr: &str) {
     loop {
-        if TcpStream::connect(addr).is_ok() {
+        let mut is_on = false;
+        if let Ok(addrs) = addr.to_socket_addrs() {
+            for addr in addrs {
+                if addr.is_ipv4() && TcpStream::connect(addr).is_ok() {
+                    is_on = true;
+                    break;
+                }
+            }
+        }
+
+        if is_on {
             break;
         }
 

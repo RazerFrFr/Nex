@@ -86,7 +86,7 @@ fn launch_game(client: bool, gs: bool, settings: &Settings, config: &Configurati
     let current_dir = std::env::current_dir().unwrap();
     let backend = settings.backend.as_deref().unwrap_or("").to_string();
     let backend_addr = match backend.as_str() {
-        "LawinServer" => "127.0.0.1:3551",
+        "LawinServer" => "localhost:3551",
         "Neonite" => "127.0.0.1:5595",
         "Nexa" => "127.0.0.1:5353",
         "Voltronite" => "127.0.0.1:8080",
@@ -94,7 +94,7 @@ fn launch_game(client: bool, gs: bool, settings: &Settings, config: &Configurati
     };
 
     println!("Waiting for backend to initialize...");
-    thread::spawn({
+    let backend_thread = thread::spawn({
         let backend = backend.to_string();
         move || {
             let _ = kill_process("node.exe");
@@ -108,20 +108,23 @@ fn launch_game(client: bool, gs: bool, settings: &Settings, config: &Configurati
                 backend::init_backend(&backend);
             }
 
-            if backend == "Neonite" {
+            if backend == "LawinServer" {
+                proxy::init("127.0.0.1:3552".to_string()).unwrap();
+            } else if backend == "Neonite" {
                 proxy::init("127.0.0.1:5595".to_string()).unwrap();
             } else if backend == "Nexa" {
                 proxy::init("127.0.0.1:5353".to_string()).unwrap();
             } else if backend == "Voltronite" {
                 proxy::init("127.0.0.1:8080".to_string()).unwrap();
             } else {
-                if !backend.ends_with(":3551") {
+                if !backend.ends_with("127.0.0.1:3551") {
                     proxy::init(backend.clone()).unwrap();
                 }
             }
         }
     });
 
+    backend_thread.join().unwrap();
     backend::wait_for_backend(backend_addr);
     println!("{}", "Backend initialized.".green());
 
